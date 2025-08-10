@@ -1,0 +1,22 @@
+# Ignore everything not needed for building
+**/.git
+**/.gitignore
+**/.DS_Store
+**/.vscode
+**/.idea
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/*.log
+
+# Exclude local env and editor files
+.env*
+*.swp
+*.swo
+
+# Allow only go sources and module files
+!go.mod
+!go.sum
+!**/*.go
+!cmd/**
