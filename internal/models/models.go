@@ -1,5 +1,12 @@
 package models
 
+type ProcessorType string
+
+const (
+	DefaultProcessor  ProcessorType = "default"
+	FallbackProcessor ProcessorType = "fallback"
+)
+
 type PaymentRequest struct {
 	CorrelationId string  `json:"correlationId"`
 	Amount        float64 `json:"amount"`

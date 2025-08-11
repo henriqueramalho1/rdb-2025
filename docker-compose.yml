@@ -12,8 +12,8 @@ services:
       - DB_NAME=rdb
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DEFAULT_PROCESSOR_URL=http://payment-processor-default
-      - FALLBACK_PROCESSOR_URL=http://payment-processor-fallback
+      - DEFAULT_PROCESSOR_URL=http://payment-processor-default:8080
+      - FALLBACK_PROCESSOR_URL=http://payment-processor-fallback:8080
     networks:
       - rdb
       - payment-processor
@@ -34,8 +34,8 @@ services:
       - DB_NAME=rdb
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DEFAULT_PROCESSOR_URL=http://payment-processor-default
-      - FALLBACK_PROCESSOR_URL=http://payment-processor-fallback
+      - DEFAULT_PROCESSOR_URL=http://payment-processor-default:8080
+      - FALLBACK_PROCESSOR_URL=http://payment-processor-fallback:8080
     networks:
       - rdb
       - payment-processor

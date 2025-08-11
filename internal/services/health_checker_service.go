@@ -2,65 +2,68 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
+	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
 )
 
 type HealthCheckerService struct {
-	httpClient *http.Client
+	httpClient       *http.Client
+	healthRepository *repositories.HealthRepository
 }
 
-func NewHealthCheckerService() *HealthCheckerService {
+func NewHealthCheckerService(healthRepo *repositories.HealthRepository) *HealthCheckerService {
 	return &HealthCheckerService{
-		httpClient: &http.Client{},
+		httpClient:       &http.Client{},
+		healthRepository: healthRepo,
 	}
 }
 
-func (s *HealthCheckerService) CheckDefaultProcessorHealth() {
-
-	for {
-		resp, err := s.httpClient.Get(os.Getenv("DEFAULT_PROCESSOR_URL") + "/health")
-		if err != nil {
-			log.Error("Error checking default processor health:", err)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			log.Error("Default processor health check failed with status:", resp.StatusCode)
-			time.Sleep(8 * time.Second)
-			continue
-		}
-
-		respBody, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if err != nil {
-			log.Error("Error reading default processor health response:", err)
-			continue
-		}
-
-		var processorStatus models.HealthStatus
-		err = json.Unmarshal(respBody, &processorStatus)
-		if err != nil {
-			log.Error("Error unmarshalling default processor health response:", err)
-			continue
-		}
-
-		time.Sleep(5 * time.Second)
+func (s *HealthCheckerService) makeRequest(url string) (models.ProcessorStatus, error) {
+	resp, err := s.httpClient.Get(url)
+	if err != nil {
+		return models.ProcessorStatus{}, err
 	}
-}
 
-func (s *HealthCheckerService) FetchProcessorsStatus() error {
-	// make the request to default and fallback and update cache
-	return nil
+	if resp.StatusCode != http.StatusOK {
+		return models.ProcessorStatus{}, errors.New("failed to get valid response from processor, status code " + resp.Status)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if err != nil {
+		return models.ProcessorStatus{}, err
+	}
+
+	var status models.ProcessorStatus
+	err = json.Unmarshal(respBody, &status)
+	if err != nil {
+		return models.ProcessorStatus{}, err
+	}
+
+	return status, nil
 }
 
 func (s *HealthCheckerService) GetProcessorsStatus() models.HealthStatus {
-	// retrieve status from cache
-	return models.HealthStatus{}
+	defaultStatus, err := s.healthRepository.GetProcessorStatus(models.DefaultProcessor)
+	if err != nil {
+		log.Error("Error fetching default processor status:", err)
+		return models.HealthStatus{}
+	}
+
+	fallbackStatus, err := s.healthRepository.GetProcessorStatus(models.FallbackProcessor)
+	if err != nil {
+		log.Error("Error fetching fallback processor status:", err)
+		return models.HealthStatus{}
+	}
+
+	return models.HealthStatus{
+		Default:  defaultStatus,
+		Fallback: fallbackStatus,
+	}
 }
