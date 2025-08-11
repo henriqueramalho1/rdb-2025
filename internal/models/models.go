@@ -5,8 +5,12 @@ type PaymentRequest struct {
 	Amount        float64 `json:"amount"`
 }
 
-type ProcessorsStatus struct {
-	IsFallback      bool `json:"isFallback"`
+type ProcessorStatus struct {
 	Failing         bool `json:"failing"`
 	MinResponseTime int  `json:"minResponseTime"`
+}
+
+type HealthStatus struct {
+	Default  ProcessorStatus
+	Fallback ProcessorStatus
 }
