@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -47,15 +48,19 @@ func (s *PaymentService) Process(payment *models.PaymentRequest, processor model
 		return err
 	}
 
+	log.Info("Processing payment in url ", url, " with payload: ", string(payload))
 	response, err := s.httpClient.Post(url, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		return err
 	}
 
 	if response.StatusCode > 399 {
-		log.Errorf("Failed to process payment in %s, status code %d", processor, response.StatusCode)
+		body, _ := io.ReadAll(response.Body)
+		defer response.Body.Close()
+		log.Errorf("Failed to process payment in %s, status code %d and body %s", processor, response.StatusCode, string(body))
 		return NewProcessFailedError()
 	}
 
+	log.Info("Payment processed successfully")
 	return nil
 }
