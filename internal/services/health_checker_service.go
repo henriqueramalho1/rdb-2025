@@ -1,9 +1,6 @@
 package services
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 
 	"github.com/gofiber/fiber/v2/log"
@@ -21,32 +18,6 @@ func NewHealthCheckerService(healthRepo *repositories.HealthRepository) *HealthC
 		httpClient:       &http.Client{},
 		healthRepository: healthRepo,
 	}
-}
-
-func (s *HealthCheckerService) makeRequest(url string) (models.ProcessorStatus, error) {
-	resp, err := s.httpClient.Get(url)
-	if err != nil {
-		return models.ProcessorStatus{}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return models.ProcessorStatus{}, errors.New("failed to get valid response from processor, status code " + resp.Status)
-	}
-
-	respBody, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-
-	if err != nil {
-		return models.ProcessorStatus{}, err
-	}
-
-	var status models.ProcessorStatus
-	err = json.Unmarshal(respBody, &status)
-	if err != nil {
-		return models.ProcessorStatus{}, err
-	}
-
-	return status, nil
 }
 
 func (s *HealthCheckerService) GetProcessorsStatus() models.HealthStatus {

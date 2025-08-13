@@ -2,7 +2,8 @@ package repositories
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
+	"strconv"
 
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
 	"github.com/redis/go-redis/v9"
@@ -28,22 +29,44 @@ func (r *HealthRepository) SetCoordinatorFlag() (bool, error) {
 }
 
 func (r *HealthRepository) GetProcessorStatus(processor models.ProcessorType) (models.ProcessorStatus, error) {
-	data, err := r.client.Get(context.Background(), string(processor)).Result()
+	isFailingStr, err := r.client.Get(context.Background(), string(processor)+":failing").Result()
 	if err != nil {
 		return models.ProcessorStatus{}, err
 	}
 
-	var status models.ProcessorStatus
-	if err := json.Unmarshal([]byte(data), &status); err != nil {
+	status := models.ProcessorStatus{}
+	switch isFailingStr {
+	case "1":
+		status.Failing = true
+	case "0":
+		status.Failing = false
+	default:
+		return models.ProcessorStatus{}, errors.New("invalid failing status value")
+	}
+
+	responseTimeStr, err := r.client.Get(context.Background(), string(processor)+":response_time").Result()
+	if err != nil {
 		return models.ProcessorStatus{}, err
 	}
+
+	status.MinResponseTime, err = strconv.Atoi(responseTimeStr)
+	if err != nil {
+		return models.ProcessorStatus{}, err
+	}
+
 	return status, nil
 }
 
 func (r *HealthRepository) SetProcessorStatus(processor models.ProcessorType, status models.ProcessorStatus) error {
-	data, err := json.Marshal(status)
+	ctx := context.Background()
+	err := r.client.Set(ctx, string(processor)+":failing", status.Failing, 0).Err()
 	if err != nil {
 		return err
 	}
-	return r.client.Set(context.Background(), string(processor), data, 0).Err()
+
+	err = r.client.Set(ctx, string(processor)+":response_time", status.MinResponseTime, 0).Err()
+	if err != nil {
+		return err
+	}
+	return nil
 }
