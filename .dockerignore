@@ -9,6 +9,9 @@
 **/build
 **/coverage
 **/*.log
+README.md
+.gitignore
+db/
 
 # Exclude local env and editor files
 .env*
