@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
@@ -32,10 +33,20 @@ func (w *PaymentWorker) ProcessPayment() {
 
 		processorsStatus := w.healthService.GetProcessorsStatus()
 
-		if !processorsStatus.Default.Failing {
-			err = w.paymentService.Process(request, models.DefaultProcessor)
+		if processorsStatus.Default.Failing {
+			err = w.paymentService.Process(request, models.FallbackProcessor)
 			if err != nil {
-				log.Error("Failed to process payment with default processor: ", err)
+				log.Error("Failed to process payment with fallback processor: ", err)
+			}
+		}
+
+		err = w.paymentService.Process(request, models.DefaultProcessor)
+		if err != nil {
+			log.Error("Failed to process payment with default processor: ", err)
+			var processFailedErr *services.ProcessFailedError
+			if errors.As(err, &processFailedErr) {
+				w.healthService.SetProcessorStatus(models.DefaultProcessor, models.ProcessorStatus{Failing: true})
+				log.Info("Marked default processor as failing")
 			}
 		}
 	}

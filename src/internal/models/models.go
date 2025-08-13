@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type ProcessorType string
 
 const (
@@ -8,8 +10,9 @@ const (
 )
 
 type PaymentRequest struct {
-	CorrelationId string  `json:"correlationId"`
-	Amount        float64 `json:"amount"`
+	CorrelationId string    `json:"correlationId"`
+	Amount        float64   `json:"amount"`
+	RequestedAt   time.Time `json:"requestedAt"`
 }
 
 type ProcessorStatus struct {

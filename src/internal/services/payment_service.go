@@ -3,12 +3,24 @@ package services
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
 )
+
+type ProcessFailedError struct {
+}
+
+func (e *ProcessFailedError) Error() string {
+	return "failed to process payment"
+}
+
+func NewProcessFailedError() *ProcessFailedError {
+	return &ProcessFailedError{}
+}
 
 type PaymentService struct {
 	httpClient *http.Client
@@ -29,6 +41,7 @@ func (s *PaymentService) Process(payment *models.PaymentRequest, processor model
 		url = os.Getenv("FALLBACK_PROCESSOR_URL") + "/payments"
 	}
 
+	payment.RequestedAt = time.Now().UTC()
 	payload, err := json.Marshal(payment)
 	if err != nil {
 		return err
@@ -40,7 +53,8 @@ func (s *PaymentService) Process(payment *models.PaymentRequest, processor model
 	}
 
 	if response.StatusCode > 399 {
-		return errors.New("processor returned status code " + response.Status)
+		log.Errorf("Failed to process payment in %s, status code %d", processor, response.StatusCode)
+		return NewProcessFailedError()
 	}
 
 	return nil

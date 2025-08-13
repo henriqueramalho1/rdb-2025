@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"errors"
 	"strconv"
 
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
@@ -30,7 +29,7 @@ func (r *HealthRepository) SetCoordinatorFlag() (bool, error) {
 
 func (r *HealthRepository) GetProcessorStatus(processor models.ProcessorType) (models.ProcessorStatus, error) {
 	isFailingStr, err := r.client.Get(context.Background(), string(processor)+":failing").Result()
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		return models.ProcessorStatus{}, err
 	}
 
@@ -38,15 +37,18 @@ func (r *HealthRepository) GetProcessorStatus(processor models.ProcessorType) (m
 	switch isFailingStr {
 	case "1":
 		status.Failing = true
-	case "0":
-		status.Failing = false
 	default:
-		return models.ProcessorStatus{}, errors.New("invalid failing status value")
+		status.Failing = false
 	}
 
 	responseTimeStr, err := r.client.Get(context.Background(), string(processor)+":response_time").Result()
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		return models.ProcessorStatus{}, err
+	}
+
+	if responseTimeStr == "" {
+		status.MinResponseTime = 0
+		return status, nil
 	}
 
 	status.MinResponseTime, err = strconv.Atoi(responseTimeStr)

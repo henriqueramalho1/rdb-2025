@@ -20,6 +20,10 @@ func NewHealthCheckerService(healthRepo *repositories.HealthRepository) *HealthC
 	}
 }
 
+func (s *HealthCheckerService) SetProcessorStatus(processor models.ProcessorType, status models.ProcessorStatus) error {
+	return s.healthRepository.SetProcessorStatus(processor, status)
+}
+
 func (s *HealthCheckerService) GetProcessorsStatus() models.HealthStatus {
 	defaultStatus, err := s.healthRepository.GetProcessorStatus(models.DefaultProcessor)
 	if err != nil {
