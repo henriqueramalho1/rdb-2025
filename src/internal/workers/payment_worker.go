@@ -10,16 +10,16 @@ import (
 )
 
 type PaymentWorker struct {
-	healthService  *services.HealthCheckerService
-	paymentService *services.PaymentService
-	paymentsQueue  *queue.PaymentsQueue
+	healthService   *services.HealthCheckerService
+	paymentsService *services.PaymentsService
+	paymentsQueue   *queue.PaymentsQueue
 }
 
-func NewPaymentWorker(healthService *services.HealthCheckerService, paymentService *services.PaymentService, paymentsQueue *queue.PaymentsQueue) *PaymentWorker {
+func NewPaymentWorker(healthService *services.HealthCheckerService, paymentsService *services.PaymentsService, paymentsQueue *queue.PaymentsQueue) *PaymentWorker {
 	return &PaymentWorker{
-		healthService:  healthService,
-		paymentService: paymentService,
-		paymentsQueue:  paymentsQueue,
+		healthService:   healthService,
+		paymentsService: paymentsService,
+		paymentsQueue:   paymentsQueue,
 	}
 }
 
@@ -30,21 +30,24 @@ func (w *PaymentWorker) ProcessPayment() {
 			continue
 		}
 
-		err = w.paymentService.Process(request, models.DefaultProcessor)
-		if err != nil {
-			log.Error("Failed to process payment with default processor: ", err)
-
-			w.healthService.SetProcessorStatus(models.DefaultProcessor, models.ProcessorStatus{Failing: true})
-			log.Info("Marked default processor as failing")
-			err := w.paymentService.Process(request, models.FallbackProcessor)
-			if err != nil {
-				log.Error("Failed to process payment with fallback processor: ", err)
-				w.healthService.SetProcessorStatus(models.FallbackProcessor, models.ProcessorStatus{Failing: true})
-				log.Info("Marked fallback processor as failing")
-				log.Info("Reenqueuing payment request")
-				w.paymentsQueue.Publish(context.Background(), request)
+		status := w.healthService.GetProcessorsStatus()
+		if !status.Default.Failing {
+			log.Info("Processing in default processor")
+			err := w.paymentsService.Process(request, models.DefaultProcessor)
+			if err == nil {
 				continue
 			}
 		}
+
+		if !status.Fallback.Failing {
+			log.Info("Processing in fallback processor")
+			err := w.paymentsService.Process(request, models.FallbackProcessor)
+			if err == nil {
+				continue
+			}
+		}
+
+		log.Info("Couldnt process payment, re-enqueuing")
+		w.paymentsQueue.Publish(context.Background(), request)
 	}
 }

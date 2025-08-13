@@ -20,6 +20,16 @@ type ProcessorStatus struct {
 	MinResponseTime int  `json:"minResponseTime"`
 }
 
+type PaymentsSummary struct {
+	Requests int     `json:"totalRequests"`
+	Amount   float64 `json:"totalAmount"`
+}
+
+type GlobalPaymentsSummary struct {
+	Default  PaymentsSummary `json:"default"`
+	Fallback PaymentsSummary `json:"fallback"`
+}
+
 type HealthStatus struct {
 	Default  ProcessorStatus
 	Fallback ProcessorStatus

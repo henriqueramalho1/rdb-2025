@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
+	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
 )
 
 type ProcessFailedError struct {
@@ -23,17 +25,19 @@ func NewProcessFailedError() *ProcessFailedError {
 	return &ProcessFailedError{}
 }
 
-type PaymentService struct {
-	httpClient *http.Client
+type PaymentsService struct {
+	httpClient         *http.Client
+	paymentsRepository *repositories.PaymentsRepository
 }
 
-func NewPaymentService() *PaymentService {
-	return &PaymentService{
-		httpClient: &http.Client{},
+func NewPaymentsService(paymentsRepository *repositories.PaymentsRepository) *PaymentsService {
+	return &PaymentsService{
+		httpClient:         &http.Client{},
+		paymentsRepository: paymentsRepository,
 	}
 }
 
-func (s *PaymentService) Process(payment *models.PaymentRequest, processor models.ProcessorType) error {
+func (s *PaymentsService) Process(payment *models.PaymentRequest, processor models.ProcessorType) error {
 	var url string
 	switch processor {
 	case models.DefaultProcessor:
@@ -61,6 +65,18 @@ func (s *PaymentService) Process(payment *models.PaymentRequest, processor model
 		return NewProcessFailedError()
 	}
 
+	err = s.paymentsRepository.Create(context.Background(), processor, payment)
+	if err != nil {
+		log.Error("Failed to create payment in repository")
+		return err
+	}
 	log.Info("Payment processed successfully")
 	return nil
+}
+
+func (s *PaymentsService) GetPaymentsSummary(ctx context.Context, from, to time.Time) (*models.GlobalPaymentsSummary, error) {
+	var summary models.GlobalPaymentsSummary
+	s.paymentsRepository.GetPaymentsSummary(ctx, from, to, &summary)
+
+	return &summary, nil
 }
