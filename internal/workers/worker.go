@@ -33,7 +33,14 @@ func NewPaymentWorker(config *models.Config, paymentRepo *repositories.PaymentsR
 		config:      config,
 		paymentRepo: paymentRepo,
 		healthRepo:  healthRepo,
-		httpClient:  &http.Client{},
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
 	}
 }
 
@@ -100,6 +107,8 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 		log.Errorf("failed to send payment request: %v", err)
 		return err
 	}
+
+	defer resp.Body.Close()
 
 	if resp.StatusCode > 399 {
 		log.Errorf("failed to process payment in %s, status code: %s", processor, resp.Status)
