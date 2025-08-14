@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
 	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
 )
@@ -47,13 +48,13 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 		}
 
 		err = w.process(ctx, models.DefaultProcessor, *req)
-		if err != nil {
+		if err == nil {
 			continue
 		}
 
 		if err := w.process(ctx, models.FallbackProcessor, *req); err != nil {
 			reqPool.Put(req)
-			continue
+			w.repo.Publish(ctx, data)
 		}
 
 		reqPool.Put(req)
@@ -62,8 +63,10 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 
 func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorType, req models.PaymentRequest) error {
 	req.RequestedAt = time.Now().UTC()
+	log.Infof("processing payment %s with requested at %s", req.CorrelationId, req.RequestedAt)
 	data, err := json.Marshal(req)
 	if err != nil {
+		log.Errorf("failed to marshal payment request: %v", err)
 		return err
 	}
 
@@ -79,6 +82,7 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 
 	resp, err := w.httpClient.Post(url+"/payments", "application/json", bytes.NewBuffer(data))
 	if err != nil {
+		log.Errorf("failed to send payment request: %v", err)
 		return err
 	}
 
@@ -86,5 +90,13 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 		return errors.New("failed to process payment, status code: " + resp.Status)
 	}
 
-	return w.repo.StorePayment(ctx, processor, &req)
+	log.Infof("success processing payment %s with requested at %s", req.CorrelationId, req.RequestedAt)
+	err = w.repo.StorePayment(ctx, processor, &req)
+
+	if err != nil {
+		log.Errorf("failed to store payment %s: %v", req.CorrelationId, err)
+		return nil
+	}
+
+	return nil
 }
