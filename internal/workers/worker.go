@@ -21,23 +21,30 @@ var reqPool = sync.Pool{
 }
 
 type PaymentWorker struct {
-	config     *models.Config
-	repo       *repositories.PaymentsRepository
-	httpClient *http.Client
+	config      *models.Config
+	paymentRepo *repositories.PaymentsRepository
+	healthRepo  *repositories.HealthRepository
+	httpClient  *http.Client
 }
 
-func NewPaymentWorker(config *models.Config, repo *repositories.PaymentsRepository) *PaymentWorker {
+func NewPaymentWorker(config *models.Config, paymentRepo *repositories.PaymentsRepository, healthRepo *repositories.HealthRepository) *PaymentWorker {
 	return &PaymentWorker{
-		config:     config,
-		repo:       repo,
-		httpClient: &http.Client{},
+		config:      config,
+		paymentRepo: paymentRepo,
+		healthRepo:  healthRepo,
+		httpClient:  &http.Client{},
 	}
 }
 
 func (w *PaymentWorker) Start(ctx context.Context) {
 	for {
-		data, err := w.repo.Consume(ctx)
+		data, err := w.paymentRepo.Consume(ctx)
 		if err != nil {
+			continue
+		}
+
+		if w.healthRepo.IsProcessorFailing(ctx, models.DefaultProcessor) {
+			w.paymentRepo.Publish(ctx, data)
 			continue
 		}
 
@@ -52,9 +59,14 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 			continue
 		}
 
+		if w.healthRepo.IsProcessorFailing(ctx, models.FallbackProcessor) {
+			w.paymentRepo.Publish(ctx, data)
+			continue
+		}
+
 		if err := w.process(ctx, models.FallbackProcessor, *req); err != nil {
 			reqPool.Put(req)
-			w.repo.Publish(ctx, data)
+			w.paymentRepo.Publish(ctx, data)
 		}
 
 		reqPool.Put(req)
@@ -87,11 +99,13 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 	}
 
 	if resp.StatusCode > 399 {
+		w.healthRepo.SetProcessorStatus(ctx, processor, false)
 		return errors.New("failed to process payment, status code: " + resp.Status)
 	}
 
 	log.Infof("success processing payment %s with requested at %s", req.CorrelationId, req.RequestedAt)
-	err = w.repo.StorePayment(ctx, processor, &req)
+	w.healthRepo.SetProcessorStatus(ctx, processor, true)
+	err = w.paymentRepo.StorePayment(ctx, processor, &req)
 
 	if err != nil {
 		log.Errorf("failed to store payment %s: %v", req.CorrelationId, err)

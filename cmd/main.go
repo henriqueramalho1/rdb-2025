@@ -28,9 +28,10 @@ func main() {
 
 	c := getConfig()
 	paymentsRepo := repositories.NewPaymentsRepository(p, r)
+	healthRepo := repositories.NewHealthRepository(r)
 
 	paymentsHandler := handlers.NewPaymentsHandler(paymentsRepo)
-	worker := workers.NewPaymentWorker(c, paymentsRepo)
+	worker := workers.NewPaymentWorker(c, paymentsRepo, healthRepo)
 
 	s.Get("/health", handlers.HealthCheck)
 	s.Get("/payments-summary", paymentsHandler.PaymentsSummary)
