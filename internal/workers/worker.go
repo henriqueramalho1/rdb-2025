@@ -77,7 +77,7 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 		return errors.New("unknown processor type")
 	}
 
-	resp, err := w.httpClient.Post(url, "application/json", bytes.NewBuffer(data))
+	resp, err := w.httpClient.Post(url+"/payments", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
