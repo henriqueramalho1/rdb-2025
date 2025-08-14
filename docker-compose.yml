@@ -13,7 +13,7 @@ services:
       - REDIS_PORT=6379
       - DEFAULT_PROCESSOR_URL=http://payment-processor-default:8080
       - FALLBACK_PROCESSOR_URL=http://payment-processor-fallback:8080
-      - NUM_WORKERS=4
+      - NUM_WORKERS=5
     networks:
       - rdb
       - payment-processor
@@ -35,7 +35,7 @@ services:
       - REDIS_PORT=6379
       - DEFAULT_PROCESSOR_URL=http://payment-processor-default:8080
       - FALLBACK_PROCESSOR_URL=http://payment-processor-fallback:8080
-      - NUM_WORKERS=4
+      - NUM_WORKERS=5
     networks:
       - rdb
       - payment-processor

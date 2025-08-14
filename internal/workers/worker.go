@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -42,12 +43,8 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-
-		if w.healthRepo.IsProcessorFailing(ctx, models.DefaultProcessor) {
-			log.Info("default processor is failing, re-queuing payment")
-			w.paymentRepo.Publish(ctx, data)
-			continue
-		}
+		defaultFailing := w.healthRepo.IsProcessorFailing(ctx, models.DefaultProcessor)
+		fallbackFailing := w.healthRepo.IsProcessorFailing(ctx, models.FallbackProcessor)
 
 		req := reqPool.Get().(*models.PaymentRequest)
 		if err := json.Unmarshal(data, req); err != nil {
@@ -55,23 +52,27 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 			continue
 		}
 
-		err = w.process(ctx, models.DefaultProcessor, *req)
-		if err == nil {
-			continue
+		bypass := rand.Intn(4) == 0
+
+		if !defaultFailing || (bypass && defaultFailing && fallbackFailing) {
+			err = w.process(ctx, models.DefaultProcessor, *req)
+			if err == nil {
+				reqPool.Put(req)
+				continue
+			}
 		}
 
-		if w.healthRepo.IsProcessorFailing(ctx, models.FallbackProcessor) {
-			log.Info("fallback processor is failing, re-queuing payment")
-			w.paymentRepo.Publish(ctx, data)
-			continue
+		if !fallbackFailing || (bypass && defaultFailing && fallbackFailing) {
+			err = w.process(ctx, models.FallbackProcessor, *req)
+			if err == nil {
+				reqPool.Put(req)
+				continue
+			}
 		}
 
-		if err := w.process(ctx, models.FallbackProcessor, *req); err != nil {
-			reqPool.Put(req)
-			w.paymentRepo.Publish(ctx, data)
-		}
-
+		log.Info("fallback processor is failing, re-queuing payment")
 		reqPool.Put(req)
+		w.paymentRepo.Publish(ctx, data)
 	}
 }
 
