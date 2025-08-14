@@ -44,6 +44,7 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 		}
 
 		if w.healthRepo.IsProcessorFailing(ctx, models.DefaultProcessor) {
+			log.Info("default processor is failing, re-queuing payment")
 			w.paymentRepo.Publish(ctx, data)
 			continue
 		}
@@ -60,6 +61,7 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 		}
 
 		if w.healthRepo.IsProcessorFailing(ctx, models.FallbackProcessor) {
+			log.Info("fallback processor is failing, re-queuing payment")
 			w.paymentRepo.Publish(ctx, data)
 			continue
 		}
@@ -99,12 +101,13 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 	}
 
 	if resp.StatusCode > 399 {
-		w.healthRepo.SetProcessorStatus(ctx, processor, false)
+		log.Errorf("failed to process payment in %s, status code: %s", processor, resp.Status)
+		go w.healthRepo.SetProcessorStatus(ctx, processor, false)
 		return errors.New("failed to process payment, status code: " + resp.Status)
 	}
 
-	log.Infof("success processing payment %s with requested at %s", req.CorrelationId, req.RequestedAt)
-	w.healthRepo.SetProcessorStatus(ctx, processor, true)
+	log.Infof("success processing payment %s with %s", req.CorrelationId, processor)
+	go w.healthRepo.SetProcessorStatus(ctx, processor, true)
 	err = w.paymentRepo.StorePayment(ctx, processor, &req)
 
 	if err != nil {
