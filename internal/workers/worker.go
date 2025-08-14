@@ -28,19 +28,12 @@ type PaymentWorker struct {
 	httpClient  *http.Client
 }
 
-func NewPaymentWorker(config *models.Config, paymentRepo *repositories.PaymentsRepository, healthRepo *repositories.HealthRepository) *PaymentWorker {
+func NewPaymentWorker(config *models.Config, paymentRepo *repositories.PaymentsRepository, healthRepo *repositories.HealthRepository, httpClient *http.Client) *PaymentWorker {
 	return &PaymentWorker{
 		config:      config,
 		paymentRepo: paymentRepo,
 		healthRepo:  healthRepo,
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
+		httpClient:  httpClient,
 	}
 }
 

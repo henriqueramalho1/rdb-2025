@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -27,11 +28,19 @@ func main() {
 	defer r.Close()
 
 	c := getConfig()
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
 	paymentsRepo := repositories.NewPaymentsRepository(p, r)
 	healthRepo := repositories.NewHealthRepository(r)
 
 	paymentsHandler := handlers.NewPaymentsHandler(paymentsRepo)
-	worker := workers.NewPaymentWorker(c, paymentsRepo, healthRepo)
+	worker := workers.NewPaymentWorker(c, paymentsRepo, healthRepo, httpClient)
 
 	s.Get("/health", handlers.HealthCheck)
 	s.Get("/payments-summary", paymentsHandler.PaymentsSummary)
