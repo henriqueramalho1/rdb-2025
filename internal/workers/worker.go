@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
 	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
@@ -55,12 +56,12 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 			continue
 		}
 
-		*req = models.PaymentRequest{}
 		reqPool.Put(req)
 	}
 }
 
 func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorType, req models.PaymentRequest) error {
+	req.RequestedAt = time.Now().UTC()
 	data, err := json.Marshal(req)
 	if err != nil {
 		return err
