@@ -5,30 +5,22 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/henriqueramalho1/rdb-2025/internal/models"
-	"github.com/henriqueramalho1/rdb-2025/internal/queue"
-	"github.com/henriqueramalho1/rdb-2025/internal/services"
+	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
 )
 
 type PaymentsHandler struct {
-	paymentsService *services.PaymentsService
-	paymentsQueue   *queue.PaymentsQueue
+	repo *repositories.PaymentsRepository
 }
 
-func NewPaymentsHandler(paymentService *services.PaymentsService, paymentsQueue *queue.PaymentsQueue) *PaymentsHandler {
+func NewPaymentsHandler(repo *repositories.PaymentsRepository) *PaymentsHandler {
 	return &PaymentsHandler{
-		paymentsService: paymentService,
-		paymentsQueue:   paymentsQueue,
+		repo: repo,
 	}
 }
 
 func (h *PaymentsHandler) CreatePayment(c *fiber.Ctx) error {
-	var req models.PaymentRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.SendStatus(http.StatusBadRequest)
-	}
-
-	go h.paymentsQueue.Publish(c.Context(), &req)
+	data := c.Body()
+	h.repo.Publish(c.Context(), data)
 	return c.SendStatus(http.StatusOK)
 }
 
@@ -46,7 +38,7 @@ func (h *PaymentsHandler) PaymentsSummary(c *fiber.Ctx) error {
 		return c.SendStatus(http.StatusBadRequest)
 	}
 
-	summary, err := h.paymentsService.GetPaymentsSummary(c.Context(), fromTime, toTime)
+	summary, err := h.repo.GetPaymentsSummary(c.Context(), fromTime, toTime)
 	if err != nil {
 		return c.SendStatus(http.StatusInternalServerError)
 	}

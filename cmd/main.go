@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/handlers"
-	"github.com/henriqueramalho1/rdb-2025/internal/queue"
+	"github.com/henriqueramalho1/rdb-2025/internal/models"
 	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
-	"github.com/henriqueramalho1/rdb-2025/internal/services"
 	"github.com/henriqueramalho1/rdb-2025/internal/workers"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -19,29 +19,43 @@ import (
 
 func main() {
 	time.Sleep(5 * time.Second)
+
+	ctx := context.Background()
 	s := fiber.New(fiber.Config{Immutable: true})
 	p := getPostgresConnection()
 	r := getRedisConnection()
 	defer r.Close()
 
-	paymentsQueue := queue.NewPaymentsQueue(r)
-	healthRepo := repositories.NewHealthRepository(r)
-	paymentsRepo := repositories.NewPaymentsRepository(p)
+	c := getConfig()
+	paymentsRepo := repositories.NewPaymentsRepository(p, r)
 
-	healthService := services.NewHealthCheckerService(healthRepo)
-	paymentService := services.NewPaymentsService(paymentsRepo)
-	paymentsHandler := handlers.NewPaymentsHandler(paymentService, paymentsQueue)
-	worker := workers.NewPaymentWorker(healthService, paymentService, paymentsQueue)
+	paymentsHandler := handlers.NewPaymentsHandler(paymentsRepo)
+	worker := workers.NewPaymentWorker(c, paymentsRepo)
 
 	s.Get("/health", handlers.HealthCheck)
 	s.Get("/payments-summary", paymentsHandler.PaymentsSummary)
 	s.Post("/payments", paymentsHandler.CreatePayment)
 
-	for i := 0; i < 16; i++ {
-		go worker.ProcessPayment()
+	for i := 0; i < c.NumWorkers; i++ {
+		go worker.Start(ctx)
 	}
 
 	s.Listen(":8080")
+}
+
+func getConfig() *models.Config {
+	workers := os.Getenv("NUM_WORKERS")
+	numWorkers, err := strconv.Atoi(workers)
+
+	if err != nil || numWorkers <= 0 {
+		log.Fatal("invalid NUM_WORKERS value:", workers)
+	}
+
+	return &models.Config{
+		DefaultUrl:  os.Getenv("DEFAULT_PROCESSOR_URL"),
+		FallbackUrl: os.Getenv("FALLBACK_PROCESSOR_URL"),
+		NumWorkers:  numWorkers,
+	}
 }
 
 func getPostgresConnection() *pgxpool.Pool {

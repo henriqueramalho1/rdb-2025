@@ -9,6 +9,12 @@ const (
 	FallbackProcessor ProcessorType = "fallback"
 )
 
+type Config struct {
+	DefaultUrl  string
+	FallbackUrl string
+	NumWorkers  int
+}
+
 type PaymentRequest struct {
 	CorrelationId string    `json:"correlationId"`
 	Amount        float64   `json:"amount"`
