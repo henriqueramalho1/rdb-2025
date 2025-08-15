@@ -14,7 +14,6 @@ import (
 	"github.com/henriqueramalho1/rdb-2025/internal/models"
 	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
 	"github.com/henriqueramalho1/rdb-2025/internal/workers"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -23,7 +22,6 @@ func main() {
 
 	ctx := context.Background()
 	s := fiber.New(fiber.Config{Immutable: true})
-	p := getPostgresConnection()
 	r := getRedisConnection()
 	defer r.Close()
 
@@ -36,7 +34,7 @@ func main() {
 			IdleConnTimeout:     90 * time.Second,
 		},
 	}
-	paymentsRepo := repositories.NewPaymentsRepository(p, r)
+	paymentsRepo := repositories.NewPaymentsRepository(r)
 	healthRepo := repositories.NewHealthRepository(httpClient, r, c)
 
 	paymentsHandler := handlers.NewPaymentsHandler(paymentsRepo)
@@ -70,30 +68,6 @@ func getConfig() *models.Config {
 	}
 }
 
-func getPostgresConnection() *pgxpool.Pool {
-	ctx := context.Background()
-	host := os.Getenv("POSTGRES_HOST")
-	user := os.Getenv("POSTGRES_USER")
-	password := os.Getenv("POSTGRES_PASSWORD")
-	dbname := os.Getenv("POSTGRES_DB")
-
-	dsn := fmt.Sprintf("postgres://%s:%s@%s/%s", user, password, host, dbname)
-	log.Info("Connecting to postgres:", dsn)
-
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		log.Fatal("failed to connect to postgres:", err)
-		return nil
-	}
-
-	if err := pool.Ping(ctx); err != nil {
-		log.Fatal("failed to ping postgres:", err)
-		return nil
-	}
-
-	return pool
-}
-
 func getRedisConnection() *redis.Client {
 	ctx := context.Background()
 	host := os.Getenv("REDIS_HOST")
@@ -101,7 +75,15 @@ func getRedisConnection() *redis.Client {
 	addr := fmt.Sprintf("%s:%s", host, port)
 
 	client := redis.NewClient(&redis.Options{
-		Addr: addr,
+		Addr:            addr,
+		PoolSize:        20, // Increase pool size for high load
+		MinIdleConns:    5,  // Keep connections ready
+		MaxIdleConns:    10,
+		ConnMaxIdleTime: time.Minute,
+		DialTimeout:     50 * time.Millisecond,
+		ReadTimeout:     50 * time.Millisecond,
+		WriteTimeout:    50 * time.Millisecond,
+		PoolTimeout:     100 * time.Millisecond,
 	})
 	if err := client.Ping(ctx).Err(); err != nil {
 		log.Fatal("failed to connect to redis:", err)

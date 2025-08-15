@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/henriqueramalho1/rdb-2025/internal/repositories"
 )
 
@@ -20,7 +22,19 @@ func NewPaymentsHandler(repo *repositories.PaymentsRepository) *PaymentsHandler 
 
 func (h *PaymentsHandler) CreatePayment(c *fiber.Ctx) error {
 	data := c.Body()
-	h.repo.Publish(c.Context(), data)
+
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
+		if err := h.repo.Publish(ctx, dataCopy); err != nil {
+			log.Error("failed to publish payment:", err)
+		}
+	}()
+
 	return c.SendStatus(http.StatusOK)
 }
 
