@@ -44,13 +44,13 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 			continue
 		}
 		defaultFailing := w.healthRepo.IsProcessorFailing(ctx, models.DefaultProcessor)
-
 		fallbackFailing := w.healthRepo.IsProcessorFailing(ctx, models.FallbackProcessor)
 
 		preferredProcessor := models.DefaultProcessor
 
 		if !defaultFailing && !fallbackFailing {
 			preferredProcessor = w.getPreferredProcessor(ctx)
+			log.Infof("custom preferred processor is %s", preferredProcessor)
 		}
 
 		req := reqPool.Get().(*models.PaymentRequest)
@@ -76,7 +76,7 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 			log.Info("default processor is failing")
 		}
 
-		if fallbackFailing {
+		if fallbackFailing && !defaultFailing {
 			bypass = rand.Intn(8) == 0 // in case fallback is failing, decreases the chances of bypass
 		}
 
