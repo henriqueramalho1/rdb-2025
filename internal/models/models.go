@@ -22,6 +22,7 @@ type PaymentRequest struct {
 }
 
 type ProcessorStatus struct {
+	Processor       ProcessorType
 	Failing         bool `json:"failing"`
 	MinResponseTime int  `json:"minResponseTime"`
 }

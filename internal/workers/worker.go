@@ -44,7 +44,14 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 			continue
 		}
 		defaultFailing := w.healthRepo.IsProcessorFailing(ctx, models.DefaultProcessor)
+
 		fallbackFailing := w.healthRepo.IsProcessorFailing(ctx, models.FallbackProcessor)
+
+		preferredProcessor := models.DefaultProcessor
+
+		if !defaultFailing && !fallbackFailing {
+			preferredProcessor = w.getPreferredProcessor(ctx)
+		}
 
 		req := reqPool.Get().(*models.PaymentRequest)
 		if err := json.Unmarshal(data, req); err != nil {
@@ -54,23 +61,41 @@ func (w *PaymentWorker) Start(ctx context.Context) {
 
 		bypass := rand.Intn(4) == 0
 
-		if !defaultFailing || (bypass && defaultFailing && fallbackFailing) {
+		/*
+			process in default:
+			- only option available
+			- if both are available and the preferred processor is default
+			- if both are failing and rand bypass allows it to try to discover if system is on
+		*/
+		if (!defaultFailing && fallbackFailing) || (!defaultFailing && !fallbackFailing && preferredProcessor == models.DefaultProcessor) || (defaultFailing && bypass) {
 			err = w.process(ctx, models.DefaultProcessor, *req)
 			if err == nil {
 				reqPool.Put(req)
 				continue
 			}
+			log.Info("default processor is failing")
 		}
 
-		if !fallbackFailing || (bypass && defaultFailing && fallbackFailing) {
+		if fallbackFailing {
+			bypass = rand.Intn(8) == 0 // in case fallback is failing, decreases the chances of bypass
+		}
+
+		/*
+			process in default:
+			- only option available
+			- if both are available and the preferred processor is fallback
+			- if both are failing and rand bypass allows it to try to discover if system is on
+		*/
+		if (!fallbackFailing && !defaultFailing) || (!defaultFailing && !fallbackFailing && preferredProcessor == models.FallbackProcessor) || (fallbackFailing && bypass) {
 			err = w.process(ctx, models.FallbackProcessor, *req)
 			if err == nil {
 				reqPool.Put(req)
 				continue
 			}
+			log.Info("fallback processor is failing")
 		}
 
-		log.Info("fallback processor is failing, re-queuing payment")
+		log.Infof("re-queuing payment %s", req.CorrelationId)
 		reqPool.Put(req)
 		w.paymentRepo.Publish(ctx, data)
 	}
@@ -119,4 +144,22 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 	}
 
 	return nil
+}
+
+func (w *PaymentWorker) getPreferredProcessor(ctx context.Context) models.ProcessorType {
+	defaultMinResponseTime := w.healthRepo.GetProcessorMinResponseTime(ctx, models.DefaultProcessor)
+	fallbackMinResponseTime := w.healthRepo.GetProcessorMinResponseTime(ctx, models.FallbackProcessor)
+
+	defaultTax := 0.05  // 5%
+	fallbackTax := 0.15 // 15%
+
+	defaultCost := float64(defaultMinResponseTime) * (1 + defaultTax)
+	fallbackCost := float64(fallbackMinResponseTime) * (1 + fallbackTax)
+
+	thresholdPercent := 100.0
+	if fallbackCost < defaultCost*(thresholdPercent/100.0) {
+		return models.FallbackProcessor
+	}
+
+	return models.DefaultProcessor
 }

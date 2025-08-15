@@ -37,7 +37,7 @@ func main() {
 		},
 	}
 	paymentsRepo := repositories.NewPaymentsRepository(p, r)
-	healthRepo := repositories.NewHealthRepository(r)
+	healthRepo := repositories.NewHealthRepository(httpClient, r, c)
 
 	paymentsHandler := handlers.NewPaymentsHandler(paymentsRepo)
 	worker := workers.NewPaymentWorker(c, paymentsRepo, healthRepo, httpClient)
@@ -45,6 +45,8 @@ func main() {
 	s.Get("/health", handlers.HealthCheck)
 	s.Get("/payments-summary", paymentsHandler.PaymentsSummary)
 	s.Post("/payments", paymentsHandler.CreatePayment)
+
+	go healthRepo.HealthCheckTask(ctx)
 
 	for i := 0; i < c.NumWorkers; i++ {
 		go worker.Start(ctx)
