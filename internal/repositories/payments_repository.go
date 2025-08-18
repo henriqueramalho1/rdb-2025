@@ -24,10 +24,8 @@ func NewPaymentsRepository(r *redis.Client) *PaymentsRepository {
 }
 
 func (q *PaymentsRepository) Publish(ctx context.Context, data []byte) error {
-	pipe := q.r.Pipeline()
-	pipe.LPush(ctx, PaymentQueueName, data)
-	_, err := pipe.Exec(ctx)
-	return err
+	q.r.LPush(ctx, PaymentQueueName, data)
+	return nil
 }
 
 func (q *PaymentsRepository) Consume(ctx context.Context) ([]byte, error) {

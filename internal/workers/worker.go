@@ -130,12 +130,12 @@ func (w *PaymentWorker) process(ctx context.Context, processor models.ProcessorT
 
 	if resp.StatusCode > 399 {
 		log.Errorf("failed to process payment in %s, status code: %s", processor, resp.Status)
-		go w.healthRepo.SetProcessorStatus(ctx, processor, false)
+		w.healthRepo.SetProcessorStatus(ctx, processor, false)
 		return errors.New("failed to process payment, status code: " + resp.Status)
 	}
 
 	log.Infof("success processing payment %s with %s", req.CorrelationId, processor)
-	go w.healthRepo.SetProcessorStatus(ctx, processor, true)
+	w.healthRepo.SetProcessorStatus(ctx, processor, true)
 	err = w.paymentRepo.StorePayment(ctx, processor, &req)
 
 	if err != nil {
